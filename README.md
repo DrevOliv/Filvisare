@@ -16,6 +16,9 @@ photos with arrow keys. Heart the ones you want to come back to later.
 - **RAW support**: `.nef`, `.dng`, `.cr2`, `.cr3`, `.arw`, `.raf`, `.rw2`,
   `.orf`, `.pef`, `.srw`, `.nrw` — decoded via embedded JPEG previews for
   speed, falling back to libraw when needed.
+- **Video support**: `.mp4`, `.mov`, `.mkv`, `.webm`, `.m4v`, `.avi` —
+  ffmpeg-extracted frame for the thumbnail, HTML5 `<video>` with Range
+  streaming for playback in the lightbox.
 - **Full-screen lightbox**: single click to open, arrow keys to flip, `L` to
   like, `Esc` to close. Next/prev images are preloaded for instant transitions.
 - **Likes**: one-click heart on any image. Jump to all liked images from the
@@ -114,13 +117,15 @@ app/
 ├── fs.py                Safe path resolution (anti-traversal)
 ├── auth/                Password login + signed session cookies
 ├── browser/             Directory listing API
-├── preview/             Preview generation
+├── preview/             Thumbnail generation
 │   ├── base.py          Abstract PreviewHandler
 │   ├── registry.py      Maps file extensions → handlers
-│   ├── cache.py         On-disk cache keyed by path+mtime+size
+│   ├── cache.py         On-disk cache keyed by path+mtime+size, LRU-evicted
 │   └── handlers/
 │       ├── standard_image.py   JPG, PNG, WebP, HEIC, TIFF, …
-│       └── raw_image.py        NEF, DNG, CR2, ARW, …
+│       ├── raw_image.py        NEF, DNG, CR2, ARW, …
+│       └── video.py            MP4, MOV, MKV, WebM, … (ffmpeg)
+├── video/               Range-aware video streaming for playback
 ├── likes/               Favorites, JSON-backed (swap for a DB later)
 └── static/              HTML / CSS / JS
 ```
@@ -176,7 +181,6 @@ Things deliberately left out of v1 but easy to add:
 
 - Multi-user auth (the `auth/` package is a drop-in replacement point).
 - Persistent likes in SQLite (swap `likes/store.py`, keep the interface).
-- Video frame previews (just add a handler).
 - EXIF panel in the lightbox.
 - Keyboard shortcut for deleting / moving files.
 
@@ -192,16 +196,6 @@ to roll back.
 
 ```bash
 docker login
-```
-
-### Same-arch build (fastest if you deploy on the same CPU as you build)
-
-```bash
-docker build -t YOUR_DOCKERHUB_USER/imageviewer:v0.1.0 \
-             -t YOUR_DOCKERHUB_USER/imageviewer:latest .
-
-docker push YOUR_DOCKERHUB_USER/imageviewer:v0.1.0
-docker push YOUR_DOCKERHUB_USER/imageviewer:latest
 ```
 
 ### Multi-arch build (recommended)

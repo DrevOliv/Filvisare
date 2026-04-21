@@ -23,6 +23,7 @@ const el = {
   likesBtn: document.getElementById("likes-btn"),
   lightbox: document.getElementById("lightbox"),
   lbImage: document.getElementById("lb-image"),
+  lbVideo: document.getElementById("lb-video"),
   lbPrev: document.getElementById("lb-prev"),
   lbNext: document.getElementById("lb-next"),
   lbClose: document.getElementById("lb-close"),
@@ -30,6 +31,8 @@ const el = {
   lbFilename: document.getElementById("lb-filename"),
   lbCounter: document.getElementById("lb-counter"),
 };
+
+const PLAY_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>`;
 
 // ───── API ─────
 async function api(path, options = {}) {
@@ -91,13 +94,18 @@ async function showLikedView() {
     const { liked } = await api("/api/likes");
     state.likedSet = new Set(liked);
     state.folders = [];
-    state.files = liked.map((p) => ({
-      name: p.split("/").pop(),
-      path: p,
-      type: "file",
-      previewable: true,
-      extension: (p.split(".").pop() || "").toLowerCase(),
-    }));
+    const VIDEO_EXTS = new Set(["mp4", "mov", "mkv", "webm", "m4v", "avi"]);
+    state.files = liked.map((p) => {
+      const ext = (p.split(".").pop() || "").toLowerCase();
+      return {
+        name: p.split("/").pop(),
+        path: p,
+        type: "file",
+        previewable: true,
+        extension: ext,
+        media_kind: VIDEO_EXTS.has(ext) ? "video" : "image",
+      };
+    });
     state.previewable = state.files;
     renderLiked();
   } catch (err) {
@@ -218,6 +226,13 @@ function fileTile(file) {
     node.appendChild(badge);
   }
 
+  if (file.media_kind === "video") {
+    const play = document.createElement("div");
+    play.className = "video-badge";
+    play.innerHTML = PLAY_SVG;
+    node.appendChild(play);
+  }
+
   if (file.previewable) {
     node.addEventListener("click", () => {
       const idx = state.previewable.findIndex((f) => f.path === file.path);
@@ -261,6 +276,9 @@ function closeLightbox() {
   el.lightbox.classList.add("hidden");
   document.body.style.overflow = "";
   el.lbImage.src = "";
+  el.lbVideo.pause();
+  el.lbVideo.removeAttribute("src");
+  el.lbVideo.load();
   state.lightboxIndex = -1;
   renderGrid();
 }
@@ -268,7 +286,23 @@ function closeLightbox() {
 function showLightboxImage() {
   const file = state.previewable[state.lightboxIndex];
   if (!file) return;
-  el.lbImage.src = `/api/preview?path=${encodeURIComponent(file.path)}&size=full`;
+
+  const isVideo = file.media_kind === "video";
+  el.lbImage.classList.toggle("hidden", isVideo);
+  el.lbVideo.classList.toggle("hidden", !isVideo);
+
+  if (isVideo) {
+    el.lbImage.src = "";
+    el.lbVideo.src = `/api/video?path=${encodeURIComponent(file.path)}`;
+    el.lbVideo.load();
+    el.lbVideo.play().catch(() => {});
+  } else {
+    el.lbVideo.pause();
+    el.lbVideo.removeAttribute("src");
+    el.lbVideo.load();
+    el.lbImage.src = `/api/preview?path=${encodeURIComponent(file.path)}&size=full`;
+  }
+
   el.lbFilename.textContent = file.name;
   el.lbCounter.textContent = `${state.lightboxIndex + 1} / ${state.previewable.length}`;
   el.lbPrev.disabled = state.lightboxIndex === 0;
@@ -281,7 +315,8 @@ function showLightboxImage() {
 
 function preload(index) {
   const file = state.previewable[index];
-  if (!file) return;
+  // Skip preloading video — it's large and streams on demand.
+  if (!file || file.media_kind === "video") return;
   const img = new Image();
   img.src = `/api/preview?path=${encodeURIComponent(file.path)}&size=full`;
 }
@@ -357,9 +392,11 @@ el.lightbox.addEventListener("click", (e) => {
 
 document.addEventListener("keydown", (e) => {
   if (el.lightbox.classList.contains("hidden")) return;
+  // When the video is focused, let arrow keys seek inside it.
+  const videoFocused = document.activeElement === el.lbVideo;
   if (e.key === "Escape") closeLightbox();
-  else if (e.key === "ArrowLeft") lightboxPrev();
-  else if (e.key === "ArrowRight") lightboxNext();
+  else if (e.key === "ArrowLeft" && !videoFocused) lightboxPrev();
+  else if (e.key === "ArrowRight" && !videoFocused) lightboxNext();
   else if (e.key.toLowerCase() === "l") toggleCurrentLike();
 });
 

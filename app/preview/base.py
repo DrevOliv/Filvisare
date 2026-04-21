@@ -13,8 +13,12 @@ class PreviewHandler(ABC):
 
     extensions: tuple[str, ...] = ()
     output_mime: str = "image/webp"
+    # How the frontend should render the full-size view.
+    # "image" → <img src="/api/preview?...&size=full">
+    # "video" → <video src="/api/video?...">
+    kind: str = "image"
 
     @abstractmethod
     def render(self, source: Path, max_size: int) -> bytes:
-        """Produce an encoded preview whose longest edge is <= max_size."""
+        """Produce an encoded thumbnail whose longest edge is <= max_size."""
         raise NotImplementedError

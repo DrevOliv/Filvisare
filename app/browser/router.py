@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..auth.dependencies import require_auth
 from ..fs import is_hidden, resolve_safe, to_relative
-from ..preview.registry import is_previewable
+from ..preview.registry import get_handler, is_previewable
 
 
 router = APIRouter(prefix="/api/browse", tags=["browser"], dependencies=[Depends(require_auth)])
@@ -26,6 +26,8 @@ def _entry(path, kind: str) -> dict:
         item["mtime"] = mtime
         item["previewable"] = is_previewable(path.suffix)
         item["extension"] = path.suffix.lstrip(".").lower()
+        handler = get_handler(path.suffix)
+        item["media_kind"] = handler.kind if handler else None
     return item
 
 
