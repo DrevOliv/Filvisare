@@ -41,12 +41,12 @@
   </div>
 
   <div id="lightbox" class="lightbox hidden" role="dialog" aria-modal="true">
-    <button class="lightbox-back" id="lb-back" aria-label="Back">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-      <span>Back</span>
-    </button>
     <button class="lightbox-close" id="lb-close" aria-label="Close">
       <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <button class="lightbox-fs" id="lb-fs" aria-label="Fullscreen">
+      <svg class="lb-ico-fs" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+      <svg class="lb-ico-fsx" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
     </button>
     <button class="lightbox-nav lb-prev" id="lb-prev" aria-label="Previous">
       <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -59,6 +59,29 @@
         <circle cx="25" cy="25" r="20" />
       </svg>
       <img id="lb-image" alt="" />
+      <div id="lb-video-wrap" class="video-wrap hidden">
+        <video id="lb-video" playsinline preload="metadata"></video>
+        <button id="vc-big-play" class="video-big-play" aria-label="Play">
+          <svg viewBox="0 0 24 24" width="36" height="36" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <div id="vc-bar" class="video-controls">
+          <button id="vc-play" class="vc-btn" aria-label="Play">
+            <svg class="vc-ico-play" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+            <svg class="vc-ico-pause" viewBox="0 0 24 24" width="20" height="20" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>
+          </button>
+          <span id="vc-current" class="vc-time">0:00</span>
+          <input id="vc-scrub" class="vc-scrub" type="range" min="0" max="0" step="0.01" value="0" aria-label="Seek" />
+          <span id="vc-duration" class="vc-time">0:00</span>
+          <button id="vc-mute" class="vc-btn" aria-label="Mute">
+            <svg class="vc-ico-vol" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="currentColor"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/></svg>
+            <svg class="vc-ico-mute" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" fill="currentColor" stroke="currentColor"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+          </button>
+          <button id="vc-fs" class="vc-btn" aria-label="Fullscreen">
+            <svg class="vc-ico-fs" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+            <svg class="vc-ico-fsx" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>
+          </button>
+        </div>
+      </div>
     </div>
     <div class="lightbox-footer">
       <span id="lb-filename"></span>

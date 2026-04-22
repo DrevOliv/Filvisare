@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from ..auth.dependencies import require_auth
 from ..fs import is_hidden, resolve_safe, to_relative
 from ..preview.registry import is_previewable
+from ..video import is_video
 
 
 router = APIRouter(prefix="/api/browse", tags=["browser"], dependencies=[Depends(require_auth)])
@@ -40,9 +41,11 @@ def _entry(path, kind: str) -> dict:
         "type": kind,
     }
     if kind == "file":
+        video = is_video(path.suffix)
         item["size"] = size
         item["mtime"] = mtime
-        item["previewable"] = is_previewable(path.suffix)
+        item["previewable"] = video or is_previewable(path.suffix)
+        item["is_video"] = video
         item["extension"] = path.suffix.lstrip(".").lower()
     else:
         item["has_subfolders"] = _has_subfolders(path)

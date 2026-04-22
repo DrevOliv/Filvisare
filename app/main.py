@@ -24,6 +24,7 @@ from app.likes.router import router as likes_router
 from app.preview import install_default_handlers
 from app.preview.cache import start_sweeper
 from app.preview.router import router as preview_router
+from app.video import router as video_router
 
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -59,6 +60,7 @@ app = FastAPI(title="Filvisare", docs_url=None, redoc_url=None, lifespan=lifespa
 app.include_router(auth_router)
 app.include_router(browser_router)
 app.include_router(preview_router)
+app.include_router(video_router)
 app.include_router(likes_router)
 
 

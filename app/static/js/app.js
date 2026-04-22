@@ -7,6 +7,10 @@ const TREE_FOLDER_SVG = `<svg viewBox="0 0 64 64" width="18" height="18" fill="c
 
 const TREE_ARROW_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true"><path d="M8 5l8 7-8 7z"/></svg>`;
 
+const PLAY_BADGE_SVG = `<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>`;
+
+const VIDEO_EXTS = new Set(["mp4", "webm", "m4v", "mov", "ogv", "ogg"]);
+
 const state = {
   path: "",
   folders: [],
@@ -28,11 +32,20 @@ const el = {
   likesBtn: document.getElementById("likes-btn"),
   lightbox: document.getElementById("lightbox"),
   lbImage: document.getElementById("lb-image"),
+  lbVideo: document.getElementById("lb-video"),
+  lbVideoWrap: document.getElementById("lb-video-wrap"),
   lbSpinner: document.getElementById("lb-spinner"),
+  vcBigPlay: document.getElementById("vc-big-play"),
+  vcPlay: document.getElementById("vc-play"),
+  vcCurrent: document.getElementById("vc-current"),
+  vcDuration: document.getElementById("vc-duration"),
+  vcScrub: document.getElementById("vc-scrub"),
+  vcMute: document.getElementById("vc-mute"),
+  vcFs: document.getElementById("vc-fs"),
+  lbFs: document.getElementById("lb-fs"),
   lbPrev: document.getElementById("lb-prev"),
   lbNext: document.getElementById("lb-next"),
   lbClose: document.getElementById("lb-close"),
-  lbBack: document.getElementById("lb-back"),
   lbLike: document.getElementById("lb-like"),
   lbFilename: document.getElementById("lb-filename"),
   lbCounter: document.getElementById("lb-counter"),
@@ -99,13 +112,17 @@ async function showLikedView() {
     const { liked } = await api("/api/likes");
     state.likedSet = new Set(liked);
     state.folders = [];
-    state.files = liked.map((p) => ({
-      name: p.split("/").pop(),
-      path: p,
-      type: "file",
-      previewable: true,
-      extension: (p.split(".").pop() || "").toLowerCase(),
-    }));
+    state.files = liked.map((p) => {
+      const extension = (p.split(".").pop() || "").toLowerCase();
+      return {
+        name: p.split("/").pop(),
+        path: p,
+        type: "file",
+        previewable: true,
+        is_video: VIDEO_EXTS.has(extension),
+        extension,
+      };
+    });
     state.previewable = state.files;
     renderLiked();
     clearTreeSelection();
@@ -169,7 +186,26 @@ function fileTile(file) {
 
   const thumb = document.createElement("div");
   thumb.className = "item-thumb";
-  if (file.previewable) {
+  if (file.is_video) {
+    thumb.classList.add("video", "loading");
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.preload = "metadata";
+    video.addEventListener("loadeddata", () => {
+      video.classList.add("loaded");
+      thumb.classList.remove("loading");
+    });
+    video.addEventListener("error", () => {
+      thumb.classList.remove("loading");
+    });
+    video.src = `/api/video?path=${encodeURIComponent(file.path)}#t=0.1`;
+    thumb.appendChild(video);
+    const badge = document.createElement("div");
+    badge.className = "play-badge";
+    badge.innerHTML = PLAY_BADGE_SVG;
+    thumb.appendChild(badge);
+  } else if (file.previewable) {
     thumb.classList.add("loading");
     const img = document.createElement("img");
     img.alt = file.name;
@@ -255,9 +291,7 @@ function buildTreeNode(folder, depth) {
   li.dataset.path = folder.path;
   li.dataset.depth = String(depth);
   li.dataset.loaded = "false";
-  // Home (empty path) always shows the arrow — we can't know upfront whether
-  // /data has subfolders without an extra request.
-  if (folder.path !== "" && folder.has_subfolders === false) {
+  if (folder.has_subfolders === false) {
     li.classList.add("is-leaf");
   }
 
@@ -326,25 +360,25 @@ function clearTreeSelection() {
 
 async function revealAndSelect(targetPath) {
   clearTreeSelection();
+  if (!targetPath) return;
+
+  const parts = targetPath.split("/");
   let currentLi = Array.from(el.tree.children).find(
-    (li) => li.dataset.path === "",
+    (li) => li.dataset.path === parts[0],
   );
   if (!currentLi) return;
   await toggleNode(currentLi, true);
 
-  if (targetPath) {
-    const parts = targetPath.split("/");
-    let acc = "";
-    for (const part of parts) {
-      acc = acc ? `${acc}/${part}` : part;
-      const childUl = currentLi.querySelector(":scope > .tree-children");
-      const nextLi = Array.from(childUl.children).find(
-        (c) => c.dataset.path === acc,
-      );
-      if (!nextLi) break;
-      await toggleNode(nextLi, true);
-      currentLi = nextLi;
-    }
+  let acc = parts[0];
+  for (let i = 1; i < parts.length; i++) {
+    acc = `${acc}/${parts[i]}`;
+    const childUl = currentLi.querySelector(":scope > .tree-children");
+    const nextLi = Array.from(childUl.children).find(
+      (c) => c.dataset.path === acc,
+    );
+    if (!nextLi) break;
+    await toggleNode(nextLi, true);
+    currentLi = nextLi;
   }
 
   const row = currentLi.querySelector(":scope > .tree-row");
@@ -354,9 +388,14 @@ async function revealAndSelect(targetPath) {
 
 async function initTree() {
   el.tree.replaceChildren();
-  const home = buildTreeNode({ name: "Home", path: "" }, 0);
-  el.tree.appendChild(home);
-  await toggleNode(home, true);
+  try {
+    const data = await api(`/api/browse?path=`);
+    for (const folder of data.folders) {
+      el.tree.appendChild(buildTreeNode(folder, 0));
+    }
+  } catch (err) {
+    if (err.message !== "unauthorized") console.warn("tree init failed", err);
+  }
 }
 
 el.tree.addEventListener("click", async (e) => {
@@ -394,13 +433,25 @@ function openLightbox(index) {
 }
 
 function closeLightbox() {
+  if (document.fullscreenElement) document.exitFullscreen?.();
   el.lightbox.classList.add("hidden");
   document.body.style.overflow = "";
   el.lbImage.src = "";
   el.lbImage.classList.remove("loaded");
+  resetVideo();
   el.lbSpinner.classList.add("hidden");
   state.lightboxLoading = false;
   state.lightboxIndex = -1;
+}
+
+function resetVideo() {
+  el.lbVideo.pause();
+  el.lbVideo.removeAttribute("src");
+  el.lbVideo.load();
+  el.lbVideoWrap.classList.add("hidden");
+  el.lbVideoWrap.classList.remove("playing");
+  el.lightbox.classList.remove("idle");
+  stopIdleTimer();
 }
 
 function setLightboxLoading(loading) {
@@ -420,19 +471,32 @@ function updateLightboxNavDisabled() {
 function showLightboxImage() {
   const file = state.previewable[state.lightboxIndex];
   if (!file) return;
-  el.lbImage.classList.remove("loaded");
   setLightboxLoading(true);
-  el.lbImage.src = `/api/preview?path=${encodeURIComponent(file.path)}&size=full`;
-  if (el.lbImage.complete && el.lbImage.naturalWidth > 0) {
-    el.lbImage.classList.add("loaded");
-    setLightboxLoading(false);
+
+  if (file.is_video) {
+    el.lbImage.classList.add("hidden");
+    el.lbImage.src = "";
+    el.lbImage.classList.remove("loaded");
+    el.lbVideoWrap.classList.remove("hidden", "playing");
+    el.lightbox.classList.remove("idle");
+    resetVideoUi();
+    el.lbVideo.src = `/api/video?path=${encodeURIComponent(file.path)}`;
+    el.lbVideo.load();
+  } else {
+    resetVideo();
+    el.lbImage.classList.remove("hidden", "loaded");
+    el.lbImage.src = `/api/preview?path=${encodeURIComponent(file.path)}&size=full`;
+    if (el.lbImage.complete && el.lbImage.naturalWidth > 0) {
+      el.lbImage.classList.add("loaded");
+      setLightboxLoading(false);
+    }
+    preload(state.lightboxIndex + 1);
+    preload(state.lightboxIndex - 1);
   }
+
   el.lbFilename.textContent = file.name;
   el.lbCounter.textContent = `${state.lightboxIndex + 1} / ${state.previewable.length}`;
   el.lbLike.classList.toggle("liked", state.likedSet.has(file.path));
-
-  preload(state.lightboxIndex + 1);
-  preload(state.lightboxIndex - 1);
 }
 
 el.lbImage.addEventListener("load", () => {
@@ -444,6 +508,117 @@ el.lbImage.addEventListener("load", () => {
 el.lbImage.addEventListener("error", () => {
   setLightboxLoading(false);
 });
+
+el.lbVideo.addEventListener("canplay", () => {
+  if (el.lightbox.classList.contains("hidden")) return;
+  setLightboxLoading(false);
+});
+
+el.lbVideo.addEventListener("error", () => {
+  setLightboxLoading(false);
+});
+
+// ───── Custom video controls ─────
+function formatTime(t) {
+  if (!isFinite(t) || t < 0) t = 0;
+  const m = Math.floor(t / 60);
+  const s = Math.floor(t % 60).toString().padStart(2, "0");
+  return `${m}:${s}`;
+}
+
+function togglePlay() {
+  if (el.lbVideo.paused) el.lbVideo.play();
+  else el.lbVideo.pause();
+}
+
+el.vcPlay.addEventListener("click", togglePlay);
+el.vcBigPlay.addEventListener("click", togglePlay);
+el.lbVideo.addEventListener("click", togglePlay);
+
+el.lbVideo.addEventListener("play", () => {
+  el.lbVideoWrap.classList.add("playing");
+  startIdleTimer();
+});
+el.lbVideo.addEventListener("pause", () => {
+  el.lbVideoWrap.classList.remove("playing");
+  el.lightbox.classList.remove("idle");
+  stopIdleTimer();
+});
+el.lbVideo.addEventListener("ended", () => {
+  el.lbVideoWrap.classList.remove("playing");
+  el.lightbox.classList.remove("idle");
+  stopIdleTimer();
+});
+
+el.lbVideo.addEventListener("loadedmetadata", () => {
+  el.vcDuration.textContent = formatTime(el.lbVideo.duration);
+  el.vcScrub.max = String(el.lbVideo.duration || 0);
+});
+
+el.lbVideo.addEventListener("timeupdate", () => {
+  el.vcCurrent.textContent = formatTime(el.lbVideo.currentTime);
+  const dur = el.lbVideo.duration || 0;
+  const pct = dur > 0 ? (el.lbVideo.currentTime / dur) * 100 : 0;
+  el.vcScrub.value = String(el.lbVideo.currentTime);
+  el.vcScrub.style.backgroundSize = `${pct}% 100%`;
+});
+
+el.vcScrub.addEventListener("input", () => {
+  el.lbVideo.currentTime = parseFloat(el.vcScrub.value) || 0;
+});
+
+el.vcMute.addEventListener("click", () => {
+  el.lbVideo.muted = !el.lbVideo.muted;
+});
+el.lbVideo.addEventListener("volumechange", () => {
+  el.lbVideoWrap.classList.toggle("muted", el.lbVideo.muted);
+});
+
+function toggleFullscreen() {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else el.lightbox.requestFullscreen?.();
+}
+el.vcFs.addEventListener("click", toggleFullscreen);
+el.lbFs.addEventListener("click", toggleFullscreen);
+
+// Auto-hide controls while playing
+let idleTimer = null;
+let lastPointer = { x: 0, y: 0, t: 0 };
+
+function startIdleTimer() {
+  stopIdleTimer();
+  idleTimer = setTimeout(() => {
+    if (!el.lbVideo.paused) el.lightbox.classList.add("idle");
+  }, 2500);
+}
+function stopIdleTimer() {
+  if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+}
+function wakeControls() {
+  el.lightbox.classList.remove("idle");
+  if (!el.lbVideo.paused) startIdleTimer();
+}
+
+// Ignore sub-pixel jitter and events closer than 80ms apart so a stationary
+// cursor doesn't keep resetting the hide timer.
+el.lightbox.addEventListener("pointermove", (e) => {
+  if (el.lbVideoWrap.classList.contains("hidden")) return;
+  const now = performance.now();
+  const dx = Math.abs(e.clientX - lastPointer.x);
+  const dy = Math.abs(e.clientY - lastPointer.y);
+  if (dx + dy < 3 || now - lastPointer.t < 80) return;
+  lastPointer = { x: e.clientX, y: e.clientY, t: now };
+  wakeControls();
+});
+el.lbVideoWrap.addEventListener("touchstart", wakeControls);
+
+function resetVideoUi() {
+  el.vcCurrent.textContent = "0:00";
+  el.vcDuration.textContent = "0:00";
+  el.vcScrub.max = "0";
+  el.vcScrub.value = "0";
+  el.vcScrub.style.backgroundSize = "0% 100%";
+}
 
 function preload(index) {
   const file = state.previewable[index];
@@ -506,7 +681,6 @@ el.likesBtn.addEventListener("click", () => {
 });
 
 el.lbClose.addEventListener("click", closeLightbox);
-el.lbBack.addEventListener("click", closeLightbox);
 el.lbPrev.addEventListener("click", lightboxPrev);
 el.lbNext.addEventListener("click", lightboxNext);
 el.lbLike.addEventListener("click", toggleCurrentLike);
@@ -518,9 +692,12 @@ el.lightbox.addEventListener("click", (e) => {
 
 document.addEventListener("keydown", (e) => {
   if (el.lightbox.classList.contains("hidden")) return;
+  const videoActive = !el.lbVideoWrap.classList.contains("hidden");
+  const onScrubber = document.activeElement === el.vcScrub;
   if (e.key === "Escape") closeLightbox();
-  else if (e.key === "ArrowLeft") lightboxPrev();
-  else if (e.key === "ArrowRight") lightboxNext();
+  else if (e.key === " " && videoActive) { e.preventDefault(); togglePlay(); }
+  else if (e.key === "ArrowLeft" && !onScrubber) lightboxPrev();
+  else if (e.key === "ArrowRight" && !onScrubber) lightboxNext();
   else if (e.key.toLowerCase() === "h") toggleCurrentLike();
 });
 
