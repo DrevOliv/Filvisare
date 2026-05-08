@@ -33,6 +33,23 @@ def read_or_generate(source: Path, max_size: int, mime: str, generator) -> bytes
     return data
 
 
+def is_cached(source: Path, max_size: int, mime: str) -> bool:
+    return cache_path(source, max_size, mime).exists()
+
+
+def ensure_cached(source: Path, max_size: int, mime: str, generator) -> bool:
+    """Generate the preview only if it isn't cached yet. Returns True on hit."""
+    path = cache_path(source, max_size, mime)
+    if path.exists():
+        return True
+    data = generator()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_bytes(data)
+    tmp.replace(path)
+    return False
+
+
 def start_sweeper() -> None:
     """Start a background thread that wipes the cache on an interval.
 
