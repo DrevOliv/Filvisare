@@ -7,6 +7,7 @@ if __name__ == "__main__":
     import sys
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import asyncio
 import logging
 import tempfile
 from contextlib import asynccontextmanager
@@ -20,9 +21,10 @@ from app.auth.dependencies import verify_token
 from app.auth.router import router as auth_router
 from app.browser.router import router as browser_router
 from app.config import settings
+from app.download.router import router as download_router
 from app.likes.router import router as likes_router
 from app.preview import install_default_handlers
-from app.preview.cache import start_sweeper
+from app.preview.cache import run_sweeper
 from app.preview.router import router as preview_router
 from app.video import router as video_router
 
@@ -51,8 +53,15 @@ def _check_writable(path: Path, label: str) -> None:
 async def lifespan(_app: FastAPI):
     _check_writable(settings.cache_root, "CACHE_ROOT")
     _check_writable(settings.state_root, "STATE_ROOT")
-    start_sweeper()
-    yield
+    sweeper = asyncio.create_task(run_sweeper(), name="cache-sweeper")
+    try:
+        yield
+    finally:
+        sweeper.cancel()
+        try:
+            await sweeper
+        except asyncio.CancelledError:
+            pass
 
 
 app = FastAPI(title="Filvisare", docs_url=None, redoc_url=None, lifespan=lifespan)
@@ -62,6 +71,7 @@ app.include_router(browser_router)
 app.include_router(preview_router)
 app.include_router(video_router)
 app.include_router(likes_router)
+app.include_router(download_router)
 
 
 def _is_authed(request: Request) -> bool:

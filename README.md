@@ -31,10 +31,17 @@ photos with arrow keys. Heart the ones you want to come back to later.
 - **RAW support**: `.nef`, `.dng`, `.cr2`, `.cr3`, `.arw`, `.raf`, `.rw2`,
   `.orf`, `.pef`, `.srw`, `.nrw` — decoded via embedded JPEG previews for
   speed, falling back to libraw when needed.
+- **Video playback**: `.mp4`, `.webm`, `.m4v`, `.mov`, `.ogv`, `.ogg` show
+  live thumbnails on the grid and play in the lightbox with custom controls
+  (play/pause, scrub, mute, fullscreen).
 - **Full-screen lightbox**: single click to open, arrow keys to flip, `L` to
   like, `Esc` to close. Next/prev images are preloaded for instant transitions.
 - **Likes**: one-click heart on any image. Jump to all liked images from the
   toolbar — useful when you want to come back and process them.
+- **Select & download**: flip on Select mode, tick any mix of files and
+  folders, hit Download. A single file streams as-is; multiple items (or any
+  folder) stream as a zip that starts downloading as soon as the server writes
+  the first entry — no wait for the archive to finish building.
 - **Fast previews**: WebP output, on-disk cache keyed by file mtime so a second
   visit is instant.
 - **Docker-native**: mount any folder under `/data/<name>` and it shows up in
@@ -111,8 +118,13 @@ python -c "import secrets; print(secrets.token_urlsafe(32))"
 | Go up a level             | Back arrow in toolbar, or click a breadcrumb     |
 | Open image fullscreen     | Click the thumbnail                              |
 | Next / previous image     | `→` / `←`, or on-screen arrows                   |
+| Play / pause video        | Click the video, the play button, or `Space`     |
 | Like / unlike current     | Heart button, or press `L`                       |
 | See all liked images      | "Liked" button in the top right                  |
+| Turn on select mode       | "Select" button in the toolbar                   |
+| Select / deselect an item | Click the tile (in select mode)                  |
+| Select everything in view | "Select all" button                              |
+| Download the selection    | "Download" button (appears once something is selected) |
 | Close fullscreen          | `Esc`, or the `×` button, or click the backdrop  |
 
 ---
@@ -127,6 +139,7 @@ app/
 ├── main.py              FastAPI app wiring
 ├── config.py            Env-driven settings
 ├── fs.py                Safe path resolution (anti-traversal)
+├── video.py             Video streaming endpoint (Range-aware FileResponse)
 ├── auth/                Password login + signed session cookies
 ├── browser/             Directory listing API
 ├── preview/             Preview generation
@@ -137,6 +150,7 @@ app/
 │       ├── standard_image.py   JPG, PNG, WebP, HEIC, TIFF, …
 │       └── raw_image.py        NEF, DNG, CR2, ARW, …
 ├── likes/               Favorites, JSON-backed (swap for a DB later)
+├── download/            Select-mode zip streaming
 └── static/              HTML / CSS / JS
 ```
 
@@ -191,9 +205,24 @@ Things deliberately left out of v1 but easy to add:
 
 - Multi-user auth (the `auth/` package is a drop-in replacement point).
 - Persistent likes in SQLite (swap `likes/store.py`, keep the interface).
-- Video frame previews (just add a handler).
 - EXIF panel in the lightbox.
 - Keyboard shortcut for deleting / moving files.
+
+---
+
+## Ideas
+
+Small things that would be nice but aren't planned yet:
+
+- **Mirror likes to macOS Finder tags.** When you like an image in the app,
+  also write the native "Red" color tag to the file's
+  `com.apple.metadata:_kMDItemUserTags` xattr so the same image shows the red
+  dot when you open the folder in Finder. Roughly ~50 lines of code plus the
+  `xattr` package. Known caveat: xattrs written from inside a Docker bind-mount
+  don't always propagate back to the host APFS volume — reliable when running
+  the app natively on macOS, hit-or-miss under Docker Desktop.
+- **Two-way sync for likes.** Pick up tags that were added or removed directly
+  in Finder via a small reconcile pass at startup.
 
 ---
 

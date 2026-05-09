@@ -20,7 +20,11 @@ const state = {
   lightboxIndex: -1,
   likedView: false,
   lightboxLoading: false,
+  selectMode: false,
+  selected: new Set(),
 };
+
+const CHECKBOX_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
 
 const el = {
   grid: document.getElementById("grid"),
@@ -30,6 +34,10 @@ const el = {
   tree: document.getElementById("tree"),
   logout: document.getElementById("logout-btn"),
   likesBtn: document.getElementById("likes-btn"),
+  selectBtn: document.getElementById("select-btn"),
+  selectAllBtn: document.getElementById("select-all-btn"),
+  downloadBtn: document.getElementById("download-btn"),
+  downloadLabel: document.getElementById("download-label"),
   lightbox: document.getElementById("lightbox"),
   lbImage: document.getElementById("lb-image"),
   lbVideo: document.getElementById("lb-video"),
@@ -163,6 +171,8 @@ function renderGrid() {
   for (const folder of state.folders) fragment.appendChild(folderTile(folder));
   for (const file of state.files) fragment.appendChild(fileTile(file));
   el.grid.replaceChildren(fragment);
+
+  updateSelectAllButton();
 }
 
 function folderTile(folder) {
@@ -174,6 +184,8 @@ function folderTile(folder) {
     <div class="item-thumb">${FOLDER_SVG}</div>
     <div class="item-name">${escapeHtml(folder.name)}</div>
   `;
+  node.appendChild(selectCheckbox());
+  if (state.selected.has(folder.path)) node.classList.add("selected");
   return node;
 }
 
@@ -235,7 +247,16 @@ function fileTile(file) {
   node.appendChild(name);
 
   if (liked) node.appendChild(heartBadge());
+  node.appendChild(selectCheckbox());
+  if (state.selected.has(file.path)) node.classList.add("selected");
   return node;
+}
+
+function selectCheckbox() {
+  const box = document.createElement("div");
+  box.className = "select-checkbox";
+  box.innerHTML = CHECKBOX_SVG;
+  return box;
 }
 
 function heartBadge() {
@@ -261,6 +282,11 @@ el.grid.addEventListener("click", (e) => {
   const entry = pathIndex.get(tile.dataset.path);
   if (!entry) return;
 
+  if (state.selectMode) {
+    toggleSelected(entry.data.path, tile);
+    return;
+  }
+
   if (entry.kind === "folder") {
     // Single-tap-to-enter on touch; desktop uses dblclick via the below.
     const now = Date.now();
@@ -278,6 +304,7 @@ el.grid.addEventListener("click", (e) => {
 });
 
 el.grid.addEventListener("dblclick", (e) => {
+  if (state.selectMode) return;
   const tile = e.target.closest(".item[data-kind='folder']");
   if (!tile) return;
   const entry = pathIndex.get(tile.dataset.path);
@@ -658,6 +685,107 @@ async function toggleCurrentLike() {
   }
 }
 
+// ───── Select & Download ─────
+function toggleSelectMode() {
+  state.selectMode = !state.selectMode;
+  if (!state.selectMode) state.selected.clear();
+  document.body.classList.toggle("select-mode", state.selectMode);
+  el.selectBtn.classList.toggle("active", state.selectMode);
+  refreshSelectionClasses();
+  updateDownloadButton();
+  updateSelectAllButton();
+}
+
+function toggleSelected(path, tile) {
+  if (state.selected.has(path)) {
+    state.selected.delete(path);
+    tile.classList.remove("selected");
+  } else {
+    state.selected.add(path);
+    tile.classList.add("selected");
+  }
+  updateDownloadButton();
+  updateSelectAllButton();
+}
+
+function visiblePaths() {
+  const paths = [];
+  for (const f of state.folders) paths.push(f.path);
+  for (const f of state.files) paths.push(f.path);
+  return paths;
+}
+
+function allVisibleSelected() {
+  const paths = visiblePaths();
+  if (paths.length === 0) return false;
+  for (const p of paths) if (!state.selected.has(p)) return false;
+  return true;
+}
+
+function toggleSelectAll() {
+  const paths = visiblePaths();
+  if (paths.length === 0) return;
+  if (allVisibleSelected()) {
+    for (const p of paths) state.selected.delete(p);
+  } else {
+    for (const p of paths) state.selected.add(p);
+  }
+  refreshSelectionClasses();
+  updateDownloadButton();
+  updateSelectAllButton();
+}
+
+function updateSelectAllButton() {
+  el.selectAllBtn.classList.toggle("hidden", !state.selectMode);
+  el.selectAllBtn.classList.toggle("active", state.selectMode && allVisibleSelected());
+}
+
+function refreshSelectionClasses() {
+  el.grid.querySelectorAll(".item").forEach((tile) => {
+    tile.classList.toggle("selected", state.selected.has(tile.dataset.path));
+  });
+}
+
+function updateDownloadButton() {
+  const count = state.selected.size;
+  const show = state.selectMode && count > 0;
+  el.downloadBtn.classList.toggle("hidden", !show);
+  el.downloadLabel.textContent = count > 0 ? `Download (${count})` : "Download";
+}
+
+function downloadSelected() {
+  if (!state.selected.size) return;
+  const paths = Array.from(state.selected);
+
+  // POST into a hidden iframe so the browser streams the response directly to
+  // its download UI. The save dialog appears as soon as bytes start arriving,
+  // without blocking or replacing the current page.
+  let iframe = document.getElementById("__download-iframe");
+  if (!iframe) {
+    iframe = document.createElement("iframe");
+    iframe.name = "__download";
+    iframe.id = "__download-iframe";
+    iframe.style.display = "none";
+    document.body.appendChild(iframe);
+  }
+
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = "/api/download";
+  form.target = "__download";
+  form.style.display = "none";
+  for (const p of paths) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = "paths";
+    input.value = p;
+    form.appendChild(input);
+  }
+  document.body.appendChild(form);
+  form.submit();
+  form.remove();
+}
+
 // ───── Helpers ─────
 function showLoading(on) {
   el.loading.classList.toggle("hidden", !on);
@@ -679,6 +807,10 @@ el.likesBtn.addEventListener("click", () => {
   if (state.likedView) navigate(state.path || "");
   else showLikedView();
 });
+
+el.selectBtn.addEventListener("click", toggleSelectMode);
+el.selectAllBtn.addEventListener("click", toggleSelectAll);
+el.downloadBtn.addEventListener("click", downloadSelected);
 
 el.lbClose.addEventListener("click", closeLightbox);
 el.lbPrev.addEventListener("click", lightboxPrev);

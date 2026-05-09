@@ -1,14 +1,9 @@
+import asyncio
 import hashlib
 import shutil
-import threading
-import time
 from pathlib import Path
 
 from ..config import settings
-
-
-_sweeper_started = False
-_sweeper_lock = threading.Lock()
 
 
 def cache_path(source: Path, max_size: int, mime: str) -> Path:
@@ -33,30 +28,14 @@ def read_or_generate(source: Path, max_size: int, mime: str, generator) -> bytes
     return data
 
 
-def start_sweeper() -> None:
-    """Start a background thread that wipes the cache on an interval.
-
-    Safe to call multiple times; only the first call starts the thread.
-    If CACHE_CLEAR_INTERVAL is 0, no thread is started.
-    """
-    global _sweeper_started
-    with _sweeper_lock:
-        if _sweeper_started:
-            return
-        _sweeper_started = True
-
-    if settings.cache_clear_interval <= 0:
-        return
-
-    thread = threading.Thread(target=_sweep_loop, name="cache-sweeper", daemon=True)
-    thread.start()
-
-
-def _sweep_loop() -> None:
+async def run_sweeper() -> None:
+    """Periodically wipe the cache. Cancel the task to stop it."""
     interval = settings.cache_clear_interval
+    if interval <= 0:
+        return
     while True:
-        time.sleep(interval)
-        _clear_cache()
+        await asyncio.sleep(interval)
+        await asyncio.to_thread(_clear_cache)
 
 
 def _clear_cache() -> None:

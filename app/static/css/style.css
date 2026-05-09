@@ -474,6 +474,61 @@ img {
   backdrop-filter: blur(4px);
 }
 
+.item .select-checkbox {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  color: transparent;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(4px);
+  z-index: 2;
+  transition: background 0.15s, color 0.15s, border-color 0.15s, transform 0.12s;
+}
+
+body.select-mode .item .select-checkbox {
+  display: flex;
+}
+
+body.select-mode .item .heart-badge {
+  top: 44px;
+}
+
+.item.selected .select-checkbox {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  transform: scale(1.05);
+}
+
+body.select-mode .item.selected {
+  background: rgba(79, 140, 255, 0.14);
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+#select-btn.active,
+#select-all-btn.active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+#download-btn {
+  color: var(--text);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+#download-btn:hover {
+  filter: brightness(1.1);
+}
+
 .empty,
 .loading {
   text-align: center;
