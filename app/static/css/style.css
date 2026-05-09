@@ -529,33 +529,6 @@ body.select-mode .item.selected {
   filter: brightness(1.1);
 }
 
-#cache-btn {
-  font-variant-numeric: tabular-nums;
-}
-
-#cache-btn .cache-ico-done { display: none; }
-
-#cache-btn.complete {
-  color: #6dd58c;
-  border-color: rgba(109, 213, 140, 0.5);
-}
-
-#cache-btn.complete .cache-ico-idle { display: none; }
-#cache-btn.complete .cache-ico-done { display: block; }
-
-#cache-btn.warming {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-#cache-btn.warming .cache-ico-idle {
-  animation: cache-spin 1.1s linear infinite;
-}
-
-@keyframes cache-spin {
-  to { transform: rotate(360deg); }
-}
-
 .empty,
 .loading {
   text-align: center;

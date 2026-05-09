@@ -22,8 +22,6 @@ const state = {
   lightboxLoading: false,
   selectMode: false,
   selected: new Set(),
-  warming: false,
-  warmAbort: null,
 };
 
 const CHECKBOX_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
@@ -40,8 +38,6 @@ const el = {
   selectAllBtn: document.getElementById("select-all-btn"),
   downloadBtn: document.getElementById("download-btn"),
   downloadLabel: document.getElementById("download-label"),
-  cacheBtn: document.getElementById("cache-btn"),
-  cacheLabel: document.getElementById("cache-label"),
   lightbox: document.getElementById("lightbox"),
   lbImage: document.getElementById("lb-image"),
   lbVideo: document.getElementById("lb-video"),
@@ -99,7 +95,6 @@ async function toggleLike(path) {
 async function navigate(path) {
   state.likedView = false;
   el.likesBtn.classList.remove("active");
-  abortWarm();
   showLoading(true);
   try {
     const data = await api(`/api/browse?path=${encodeURIComponent(path)}`);
@@ -109,7 +104,6 @@ async function navigate(path) {
     state.previewable = data.files.filter((f) => f.previewable);
     window.history.replaceState({}, "", `#/${state.path}`);
     render();
-    refreshCacheStatus();
     revealAndSelect(state.path);
   } catch (err) {
     if (err.message !== "unauthorized") alert(err.message);
@@ -121,7 +115,6 @@ async function navigate(path) {
 async function showLikedView() {
   state.likedView = true;
   el.likesBtn.classList.add("active");
-  abortWarm();
   showLoading(true);
   try {
     const { liked } = await api("/api/likes");
@@ -140,7 +133,6 @@ async function showLikedView() {
     });
     state.previewable = state.files;
     renderLiked();
-    refreshCacheStatus();
     clearTreeSelection();
   } catch (err) {
     if (err.message !== "unauthorized") alert(err.message);
@@ -794,102 +786,6 @@ function downloadSelected() {
   form.remove();
 }
 
-// ───── Cache indicator ─────
-function imagePreviewables() {
-  return state.previewable.filter((f) => !f.is_video);
-}
-
-function setCacheLabel(done, total) {
-  el.cacheLabel.textContent = `${done} / ${total}`;
-  el.cacheBtn.classList.toggle("complete", total > 0 && done >= total);
-  el.cacheBtn.title =
-    total > 0 && done >= total
-      ? "All previews cached"
-      : "Pre-cache previews for this folder";
-}
-
-async function refreshCacheStatus() {
-  const files = imagePreviewables();
-  if (files.length === 0) {
-    el.cacheBtn.classList.add("hidden");
-    el.cacheBtn.classList.remove("warming", "complete");
-    return;
-  }
-  el.cacheBtn.classList.remove("hidden");
-  setCacheLabel(0, files.length);
-  try {
-    const data = await api("/api/preview/status", {
-      method: "POST",
-      body: JSON.stringify({ paths: files.map((f) => f.path) }),
-    });
-    setCacheLabel(data.cached, data.total);
-  } catch (err) {
-    if (err.message !== "unauthorized") console.warn("cache status failed", err);
-  }
-}
-
-function abortWarm() {
-  if (state.warmAbort) {
-    state.warmAbort.abort();
-    state.warmAbort = null;
-  }
-  state.warming = false;
-  el.cacheBtn.classList.remove("warming");
-}
-
-async function startWarm() {
-  if (state.warming) return;
-  const files = imagePreviewables();
-  if (!files.length) return;
-
-  const ctrl = new AbortController();
-  state.warmAbort = ctrl;
-  state.warming = true;
-  el.cacheBtn.classList.add("warming");
-  el.cacheBtn.classList.remove("complete");
-
-  try {
-    const res = await fetch("/api/preview/warm", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paths: files.map((f) => f.path) }),
-      signal: ctrl.signal,
-    });
-    if (res.status === 401) {
-      window.location.href = "/login";
-      return;
-    }
-    if (!res.ok || !res.body) throw new Error(`warm failed: ${res.status}`);
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = "";
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split("\n\n");
-      buffer = events.pop() || "";
-      for (const ev of events) {
-        const dataLine = ev.split("\n").find((l) => l.startsWith("data:"));
-        if (!dataLine) continue;
-        try {
-          const obj = JSON.parse(dataLine.slice(5).trim());
-          setCacheLabel(obj.done, obj.total);
-        } catch (_) {
-          // ignore malformed event
-        }
-      }
-    }
-  } catch (err) {
-    if (err.name !== "AbortError") console.warn("warm error", err);
-  } finally {
-    if (state.warmAbort === ctrl) state.warmAbort = null;
-    state.warming = false;
-    el.cacheBtn.classList.remove("warming");
-  }
-}
-
 // ───── Helpers ─────
 function showLoading(on) {
   el.loading.classList.toggle("hidden", !on);
@@ -915,10 +811,6 @@ el.likesBtn.addEventListener("click", () => {
 el.selectBtn.addEventListener("click", toggleSelectMode);
 el.selectAllBtn.addEventListener("click", toggleSelectAll);
 el.downloadBtn.addEventListener("click", downloadSelected);
-el.cacheBtn.addEventListener("click", () => {
-  if (state.warming) abortWarm();
-  else startWarm();
-});
 
 el.lbClose.addEventListener("click", closeLightbox);
 el.lbPrev.addEventListener("click", lightboxPrev);
