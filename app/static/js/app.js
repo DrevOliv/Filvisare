@@ -36,8 +36,10 @@ const el = {
   likesBtn: document.getElementById("likes-btn"),
   selectBtn: document.getElementById("select-btn"),
   selectAllBtn: document.getElementById("select-all-btn"),
+  downloadWrap: document.getElementById("download-wrap"),
   downloadBtn: document.getElementById("download-btn"),
   downloadLabel: document.getElementById("download-label"),
+  downloadMenu: document.getElementById("download-menu"),
   lightbox: document.getElementById("lightbox"),
   lbImage: document.getElementById("lb-image"),
   lbVideo: document.getElementById("lb-video"),
@@ -517,8 +519,7 @@ function showLightboxImage() {
       el.lbImage.classList.add("loaded");
       setLightboxLoading(false);
     }
-    preload(state.lightboxIndex + 1);
-    preload(state.lightboxIndex - 1);
+    preloadNeighbors();
   }
 
   el.lbFilename.textContent = file.name;
@@ -647,11 +648,26 @@ function resetVideoUi() {
   el.vcScrub.style.backgroundSize = "0% 100%";
 }
 
+const PRELOAD_AHEAD = 2;
+const PRELOAD_BEHIND = 1;
+const preloadCache = new Map();
+
 function preload(index) {
   const file = state.previewable[index];
-  if (!file) return;
+  if (!file || file.is_video) return;
+  if (preloadCache.has(file.path)) return;
   const img = new Image();
   img.src = `/api/preview?path=${encodeURIComponent(file.path)}&size=full`;
+  preloadCache.set(file.path, img);
+  if (preloadCache.size > 8) {
+    const firstKey = preloadCache.keys().next().value;
+    preloadCache.delete(firstKey);
+  }
+}
+
+function preloadNeighbors() {
+  for (let i = 1; i <= PRELOAD_AHEAD; i++) preload(state.lightboxIndex + i);
+  for (let i = 1; i <= PRELOAD_BEHIND; i++) preload(state.lightboxIndex - i);
 }
 
 function lightboxNext() {
@@ -749,11 +765,20 @@ function refreshSelectionClasses() {
 function updateDownloadButton() {
   const count = state.selected.size;
   const show = state.selectMode && count > 0;
-  el.downloadBtn.classList.toggle("hidden", !show);
+  el.downloadWrap.classList.toggle("hidden", !show);
   el.downloadLabel.textContent = count > 0 ? `Download (${count})` : "Download";
+  if (!show) closeDownloadMenu();
 }
 
-function downloadSelected() {
+function toggleDownloadMenu() {
+  el.downloadMenu.classList.toggle("hidden");
+}
+
+function closeDownloadMenu() {
+  el.downloadMenu.classList.add("hidden");
+}
+
+function downloadSelected(format) {
   if (!state.selected.size) return;
   const paths = Array.from(state.selected);
 
@@ -781,6 +806,11 @@ function downloadSelected() {
     input.value = p;
     form.appendChild(input);
   }
+  const fmt = document.createElement("input");
+  fmt.type = "hidden";
+  fmt.name = "format";
+  fmt.value = format || "original";
+  form.appendChild(fmt);
   document.body.appendChild(form);
   form.submit();
   form.remove();
@@ -810,7 +840,26 @@ el.likesBtn.addEventListener("click", () => {
 
 el.selectBtn.addEventListener("click", toggleSelectMode);
 el.selectAllBtn.addEventListener("click", toggleSelectAll);
-el.downloadBtn.addEventListener("click", downloadSelected);
+el.downloadBtn.addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleDownloadMenu();
+});
+
+el.downloadMenu.addEventListener("click", (e) => {
+  const item = e.target.closest(".download-menu-item");
+  if (!item) return;
+  closeDownloadMenu();
+  downloadSelected(item.dataset.format);
+});
+
+document.addEventListener("click", (e) => {
+  if (el.downloadMenu.classList.contains("hidden")) return;
+  if (!el.downloadWrap.contains(e.target)) closeDownloadMenu();
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeDownloadMenu();
+});
 
 el.lbClose.addEventListener("click", closeLightbox);
 el.lbPrev.addEventListener("click", lightboxPrev);

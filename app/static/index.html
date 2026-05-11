@@ -25,10 +25,18 @@
           <h1 id="location" class="location">Home</h1>
         </div>
         <div class="toolbar-right">
-          <button id="download-btn" class="pill-btn hidden" title="Download selected">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            <span id="download-label">Download</span>
-          </button>
+          <div id="download-wrap" class="download-wrap hidden">
+            <button id="download-btn" class="pill-btn" title="Download selected">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              <span id="download-label">Download</span>
+              <svg class="caret" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+            </button>
+            <div id="download-menu" class="download-menu hidden" role="menu">
+              <button class="download-menu-item" data-format="original" role="menuitem">Original file</button>
+              <button class="download-menu-item" data-format="jpeg" role="menuitem">As JPEG</button>
+              <button class="download-menu-item" data-format="png" role="menuitem">As PNG</button>
+            </div>
+          </div>
           <button id="select-all-btn" class="pill-btn hidden" title="Select all in view">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
             Select all
