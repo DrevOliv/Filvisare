@@ -98,6 +98,7 @@ async function navigate(path) {
   state.likedView = false;
   el.likesBtn.classList.remove("active");
   showLoading(true);
+  cancelFullPreviewWarm();
   try {
     const data = await api(`/api/browse?path=${encodeURIComponent(path)}`);
     state.path = data.path === "." ? "" : data.path;
@@ -107,6 +108,7 @@ async function navigate(path) {
     window.history.replaceState({}, "", `#/${state.path}`);
     render();
     revealAndSelect(state.path);
+    warmFullPreviews();
   } catch (err) {
     if (err.message !== "unauthorized") alert(err.message);
   } finally {
@@ -118,6 +120,7 @@ async function showLikedView() {
   state.likedView = true;
   el.likesBtn.classList.add("active");
   showLoading(true);
+  cancelFullPreviewWarm();
   try {
     const { liked } = await api("/api/likes");
     state.likedSet = new Set(liked);
@@ -136,6 +139,7 @@ async function showLikedView() {
     state.previewable = state.files;
     renderLiked();
     clearTreeSelection();
+    warmFullPreviews();
   } catch (err) {
     if (err.message !== "unauthorized") alert(err.message);
   } finally {
@@ -160,6 +164,60 @@ const HEART_BADGE_SVG = `<svg viewBox="0 0 24 24" width="14" height="14" fill="c
 // corresponding file in O(1) on huge folders.
 let pathIndex = new Map();
 
+// ───── Incremental grid rendering ─────
+// A very big folder can hold thousands of items. Building every tile up front
+// blocks the main thread for hundreds of ms, so we render in batches: the
+// first batch paints immediately and the rest stream in as the user scrolls
+// (or until the viewport is full).
+const RENDER_BATCH = 80;
+const RENDER_AHEAD_PX = 800;
+let renderQueue = [];      // ordered {kind, data} entries not yet in the DOM
+let renderObserver = null; // fires when the trailing sentinel nears the viewport
+let gridSentinel = null;
+
+function teardownIncrementalRender() {
+  if (renderObserver) {
+    renderObserver.disconnect();
+    renderObserver = null;
+  }
+  if (gridSentinel) {
+    gridSentinel.remove();
+    gridSentinel = null;
+  }
+  renderQueue = [];
+}
+
+function renderNextBatch() {
+  const batch = renderQueue.splice(0, RENDER_BATCH);
+  const fragment = document.createDocumentFragment();
+  for (const entry of batch) {
+    fragment.appendChild(
+      entry.kind === "folder" ? folderTile(entry.data) : fileTile(entry.data),
+    );
+  }
+  el.grid.insertBefore(fragment, gridSentinel);
+}
+
+// Render a batch, then keep going on later frames while the sentinel is still
+// near the viewport. An IntersectionObserver alone won't do this: it only
+// fires when intersection *changes*, so a sentinel that stays on-screen after
+// a batch never re-triggers. The rAF loop fills that gap.
+function pumpRender() {
+  if (renderQueue.length === 0) {
+    teardownIncrementalRender();
+    return;
+  }
+  renderNextBatch();
+  requestAnimationFrame(() => {
+    if (renderQueue.length === 0 || !gridSentinel) {
+      teardownIncrementalRender();
+      return;
+    }
+    const rect = gridSentinel.getBoundingClientRect();
+    if (rect.top < window.innerHeight + RENDER_AHEAD_PX) pumpRender();
+  });
+}
+
 function renderGrid() {
   const items = state.folders.length + state.files.length;
   el.empty.classList.toggle("hidden", items > 0);
@@ -168,12 +226,29 @@ function renderGrid() {
   state.folders.forEach((f, i) => pathIndex.set(f.path, { kind: "folder", data: f, i }));
   state.files.forEach((f, i) => pathIndex.set(f.path, { kind: "file", data: f, i }));
 
-  // Build off-tree in a fragment so we only trigger one reflow.
-  const fragment = document.createDocumentFragment();
-  for (const folder of state.folders) fragment.appendChild(folderTile(folder));
-  for (const file of state.files) fragment.appendChild(fileTile(file));
-  el.grid.replaceChildren(fragment);
+  teardownIncrementalRender();
+  el.grid.replaceChildren();
 
+  renderQueue = [
+    ...state.folders.map((data) => ({ kind: "folder", data })),
+    ...state.files.map((data) => ({ kind: "file", data })),
+  ];
+
+  // The sentinel trails the grid; when it scrolls near the viewport we append
+  // the next batch of tiles.
+  gridSentinel = document.createElement("div");
+  gridSentinel.className = "grid-sentinel";
+  el.grid.appendChild(gridSentinel);
+
+  renderObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((e) => e.isIntersecting)) pumpRender();
+    },
+    { rootMargin: `${RENDER_AHEAD_PX}px 0px` },
+  );
+  renderObserver.observe(gridSentinel);
+
+  pumpRender();
   updateSelectAllButton();
 }
 
@@ -651,6 +726,55 @@ function resetVideoUi() {
 const PRELOAD_AHEAD = 2;
 const PRELOAD_BEHIND = 1;
 const preloadCache = new Map();
+
+// Background warming of full-size previews after entering a directory. Fires
+// HTTP requests so the server-side cache fills before the user opens the
+// lightbox; browser HTTP cache then serves the lightbox <img> instantly.
+const WARM_CONCURRENCY = 2;
+// Warming every full-size preview in a huge folder would saturate the server
+// and starve the visible thumbnails, so only warm a bounded leading window —
+// the lightbox preloads neighbours on demand for anything past it.
+const WARM_LIMIT = 60;
+let warmController = null;
+
+function cancelFullPreviewWarm() {
+  if (warmController) {
+    warmController.abort();
+    warmController = null;
+  }
+}
+
+function warmFullPreviews() {
+  cancelFullPreviewWarm();
+  const targets = state.previewable
+    .filter((f) => !f.is_video)
+    .slice(0, WARM_LIMIT);
+  if (targets.length === 0) return;
+
+  const controller = new AbortController();
+  warmController = controller;
+  let cursor = 0;
+
+  const worker = async () => {
+    while (!controller.signal.aborted) {
+      const i = cursor++;
+      if (i >= targets.length) return;
+      const file = targets[i];
+      try {
+        const res = await fetch(
+          `/api/preview?path=${encodeURIComponent(file.path)}&size=full`,
+          { signal: controller.signal, credentials: "same-origin" },
+        );
+        // Drain the body so the browser commits it to the HTTP cache.
+        if (res.ok) await res.blob();
+      } catch (_) {
+        // Ignore aborts and transient failures; lightbox will retry on open.
+      }
+    }
+  };
+
+  for (let i = 0; i < WARM_CONCURRENCY; i++) worker();
+}
 
 function preload(index) {
   const file = state.previewable[index];
