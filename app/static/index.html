@@ -10,25 +10,41 @@
 </head>
 <body>
   <div class="layout">
-    <aside class="sidebar" aria-label="Folder tree">
+    <aside id="sidebar" class="sidebar" aria-label="Folder tree">
       <div class="sidebar-brand">
         <img src="/static/icon.png" alt="" class="brand-logo" />
         <span class="brand-name">Filvisare</span>
+        <button id="sidebar-close" class="sidebar-close" aria-label="Close folders">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
       <div class="sidebar-header">Folders</div>
       <ul id="tree" class="tree" role="tree"></ul>
     </aside>
+    <div id="sidebar-backdrop" class="sidebar-backdrop hidden"></div>
 
     <div class="content">
       <header class="toolbar">
         <div class="toolbar-left">
+          <button id="menu-btn" class="pill-btn menu-btn" title="Folders" aria-label="Show folders">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          </button>
           <h1 id="location" class="location">Home</h1>
         </div>
         <div class="toolbar-right">
+          <button id="upload-btn" class="pill-btn" title="Upload files to this folder">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <span class="btn-label">Upload</span>
+          </button>
+          <button id="new-folder-btn" class="pill-btn" title="Create a folder here">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+            <span class="btn-label">New folder</span>
+          </button>
+          <input id="upload-input" type="file" multiple hidden />
           <div id="download-wrap" class="download-wrap hidden">
             <button id="download-btn" class="pill-btn" title="Download selected">
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              <span id="download-label">Download</span>
+              <span id="download-label" class="btn-label">Download</span>
               <svg class="caret" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
             </button>
             <div id="download-menu" class="download-menu hidden" role="menu">
@@ -39,17 +55,20 @@
           </div>
           <button id="select-all-btn" class="pill-btn hidden" title="Select all in view">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-            Select all
+            <span class="btn-label">Select all</span>
           </button>
           <button id="select-btn" class="pill-btn" title="Select files and folders">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            Select
+            <span class="btn-label">Select</span>
           </button>
           <button id="likes-btn" class="pill-btn" title="Show liked images">
             <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor"><path d="M12 21s-7.5-4.58-10-9.13C.49 8.36 2.42 5 5.5 5c1.74 0 3.41.81 4.5 2.09C11.09 5.81 12.76 5 14.5 5 17.58 5 19.51 8.36 18 11.87 19.5 16.42 12 21 12 21z"/></svg>
-            Liked
+            <span class="btn-label">Liked</span>
           </button>
-          <button id="logout-btn" class="pill-btn">Logout</button>
+          <button id="logout-btn" class="pill-btn" title="Log out">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+            <span class="btn-label">Logout</span>
+          </button>
         </div>
       </header>
 
@@ -80,7 +99,7 @@
       </svg>
       <img id="lb-image" alt="" />
       <div id="lb-video-wrap" class="video-wrap hidden">
-        <video id="lb-video" playsinline preload="metadata"></video>
+        <video id="lb-video" playsinline preload="auto"></video>
         <button id="vc-big-play" class="video-big-play" aria-label="Play">
           <svg viewBox="0 0 24 24" width="36" height="36" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
         </button>
@@ -109,6 +128,19 @@
       <button id="lb-like" class="heart-btn" aria-label="Like">
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
       </button>
+    </div>
+  </div>
+
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-card">
+      <h2 id="modal-title" class="modal-title">New folder</h2>
+      <input id="modal-input" class="modal-input" type="text" autocomplete="off"
+             autocapitalize="off" spellcheck="false" enterkeyhint="done" />
+      <p id="modal-error" class="modal-error" aria-live="polite"></p>
+      <div class="modal-actions">
+        <button id="modal-cancel" class="modal-btn modal-btn-secondary">Cancel</button>
+        <button id="modal-confirm" class="modal-btn modal-btn-primary">OK</button>
+      </div>
     </div>
   </div>
 

@@ -14,6 +14,5 @@ data/
 cache/
 state/
 
-app/data/
 app/cache/
 app/state/
