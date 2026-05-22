@@ -26,6 +26,7 @@ from app.likes.router import router as likes_router
 from app.preview import install_default_handlers
 from app.preview.cache import run_sweeper
 from app.preview.router import router as preview_router
+from app.upload.router import router as upload_router
 from app.video import router as video_router
 
 
@@ -72,6 +73,7 @@ app.include_router(preview_router)
 app.include_router(video_router)
 app.include_router(likes_router)
 app.include_router(download_router)
+app.include_router(upload_router)
 
 
 def _is_authed(request: Request) -> bool:

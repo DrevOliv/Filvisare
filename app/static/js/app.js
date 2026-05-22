@@ -36,6 +36,19 @@ const el = {
   likesBtn: document.getElementById("likes-btn"),
   selectBtn: document.getElementById("select-btn"),
   selectAllBtn: document.getElementById("select-all-btn"),
+  uploadBtn: document.getElementById("upload-btn"),
+  uploadInput: document.getElementById("upload-input"),
+  newFolderBtn: document.getElementById("new-folder-btn"),
+  sidebar: document.getElementById("sidebar"),
+  menuBtn: document.getElementById("menu-btn"),
+  sidebarClose: document.getElementById("sidebar-close"),
+  sidebarBackdrop: document.getElementById("sidebar-backdrop"),
+  modal: document.getElementById("modal"),
+  modalTitle: document.getElementById("modal-title"),
+  modalInput: document.getElementById("modal-input"),
+  modalError: document.getElementById("modal-error"),
+  modalConfirm: document.getElementById("modal-confirm"),
+  modalCancel: document.getElementById("modal-cancel"),
   downloadWrap: document.getElementById("download-wrap"),
   downloadBtn: document.getElementById("download-btn"),
   downloadLabel: document.getElementById("download-label"),
@@ -150,11 +163,17 @@ async function showLikedView() {
 // ───── Render ─────
 function render() {
   el.location.textContent = state.path ? state.path : "Home";
+  // Uploading and folder creation act on the current directory; hide them
+  // in the liked view, which isn't a real folder.
+  el.uploadBtn.classList.remove("hidden");
+  el.newFolderBtn.classList.remove("hidden");
   renderGrid();
 }
 
 function renderLiked() {
   el.location.textContent = "Liked Images";
+  el.uploadBtn.classList.add("hidden");
+  el.newFolderBtn.classList.add("hidden");
   renderGrid();
 }
 
@@ -365,7 +384,11 @@ el.grid.addEventListener("click", (e) => {
   }
 
   if (entry.kind === "folder") {
-    // Single-tap-to-enter on touch; desktop uses dblclick via the below.
+    // Touch devices open a folder on a single tap; mouse keeps double-click.
+    if (isTouch()) {
+      navigate(entry.data.path);
+      return;
+    }
     const now = Date.now();
     if (lastTap.path === entry.data.path && now - lastTap.time < 300) {
       navigate(entry.data.path);
@@ -517,6 +540,13 @@ el.tree.addEventListener("click", async (e) => {
 
   clearTreeSelection();
   row.classList.add("selected");
+
+  // On touch, a single tap opens the folder and dismisses the drawer. Mouse
+  // keeps select-on-click / navigate-on-dblclick.
+  if (isTouch()) {
+    closeSidebar();
+    await navigate(li.dataset.path);
+  }
 });
 
 el.tree.addEventListener("dblclick", async (e) => {
@@ -526,6 +556,41 @@ el.tree.addEventListener("dblclick", async (e) => {
   const li = row.closest(".tree-node");
   if (!li) return;
   await navigate(li.dataset.path);
+});
+
+// ───── Sidebar drawer (mobile) ─────
+const mobileQuery = window.matchMedia("(max-width: 768px)");
+
+// Whether to open folders on a single tap. This is a pointer check, not a
+// width check, so it stays correct on a phone in landscape or on a tablet:
+// touch devices get single-tap, mouse devices keep file-manager double-click.
+const touchQuery = window.matchMedia("(pointer: coarse)");
+function isTouch() {
+  return touchQuery.matches;
+}
+
+function openSidebar() {
+  el.sidebar.classList.add("open");
+  el.sidebarBackdrop.classList.remove("hidden");
+}
+
+function closeSidebar() {
+  el.sidebar.classList.remove("open");
+  el.sidebarBackdrop.classList.add("hidden");
+}
+
+function toggleSidebar() {
+  if (el.sidebar.classList.contains("open")) closeSidebar();
+  else openSidebar();
+}
+
+el.menuBtn.addEventListener("click", toggleSidebar);
+el.sidebarClose.addEventListener("click", closeSidebar);
+el.sidebarBackdrop.addEventListener("click", closeSidebar);
+
+// A drawer left open while rotating to a wide layout would otherwise linger.
+mobileQuery.addEventListener("change", (e) => {
+  if (!e.matches) closeSidebar();
 });
 
 // ───── Lightbox ─────
@@ -940,6 +1005,157 @@ function downloadSelected(format) {
   form.remove();
 }
 
+// ───── Upload & New folder ─────
+function setUploadLabel(text) {
+  const label = el.uploadBtn.querySelector(".btn-label");
+  if (label) label.textContent = text;
+}
+
+function uploadFiles(fileList) {
+  const files = Array.from(fileList || []);
+  if (files.length === 0 || state.likedView) return;
+
+  const form = new FormData();
+  form.append("path", state.path || "");
+  for (const file of files) form.append("files", file);
+
+  // XHR (not fetch) so the upload progress event can drive the button label.
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", "/api/upload");
+
+  el.uploadBtn.disabled = true;
+  setUploadLabel("Uploading 0%");
+
+  xhr.upload.addEventListener("progress", (e) => {
+    if (e.lengthComputable) {
+      setUploadLabel(`Uploading ${Math.round((e.loaded / e.total) * 100)}%`);
+    }
+  });
+
+  const finish = () => {
+    el.uploadBtn.disabled = false;
+    setUploadLabel("Upload");
+  };
+
+  xhr.addEventListener("load", async () => {
+    finish();
+    if (xhr.status === 401) {
+      window.location.href = "/login";
+      return;
+    }
+    if (xhr.status >= 200 && xhr.status < 300) {
+      await navigate(state.path || "");
+    } else {
+      let detail = `Upload failed: ${xhr.status}`;
+      try { detail = JSON.parse(xhr.responseText).detail || detail; } catch (_) {}
+      alert(detail);
+    }
+  });
+
+  xhr.addEventListener("error", () => {
+    finish();
+    alert("Upload failed: network error");
+  });
+
+  xhr.send(form);
+}
+
+// A small in-app prompt dialog, used instead of window.prompt so it looks and
+// behaves identically on desktop and phone. `onSubmit(value)` may return an
+// error string to show inline (dialog stays open) or nothing to close it.
+let modalOnSubmit = null;
+let modalSubmitting = false;
+
+function openPromptModal({ title, placeholder = "", confirmText = "OK", onSubmit }) {
+  modalOnSubmit = onSubmit;
+  modalSubmitting = false;
+  el.modalTitle.textContent = title;
+  el.modalInput.value = "";
+  el.modalInput.placeholder = placeholder;
+  el.modalConfirm.textContent = confirmText;
+  el.modalConfirm.disabled = false;
+  el.modalError.textContent = "";
+  el.modal.classList.remove("hidden");
+  // Focus once the dialog has painted so mobile keyboards open reliably.
+  requestAnimationFrame(() => el.modalInput.focus());
+}
+
+function closePromptModal() {
+  modalOnSubmit = null;
+  el.modal.classList.add("hidden");
+}
+
+async function submitPromptModal() {
+  if (modalSubmitting || !modalOnSubmit) return;
+  modalSubmitting = true;
+  el.modalConfirm.disabled = true;
+  el.modalError.textContent = "";
+  try {
+    const error = await modalOnSubmit(el.modalInput.value.trim());
+    if (error) {
+      el.modalError.textContent = error;
+      el.modalInput.focus();
+      el.modalInput.select();
+    } else {
+      closePromptModal();
+    }
+  } catch (err) {
+    el.modalError.textContent = err.message || "Something went wrong.";
+  } finally {
+    modalSubmitting = false;
+    el.modalConfirm.disabled = false;
+  }
+}
+
+el.modalConfirm.addEventListener("click", submitPromptModal);
+el.modalCancel.addEventListener("click", closePromptModal);
+el.modal.addEventListener("click", (e) => {
+  if (e.target === el.modal) closePromptModal();
+});
+el.modalInput.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    submitPromptModal();
+  }
+});
+
+function createFolder() {
+  if (state.likedView) return;
+  openPromptModal({
+    title: "New folder",
+    placeholder: "Folder name",
+    confirmText: "Create",
+    onSubmit: async (name) => {
+      if (!name) return "Please enter a folder name.";
+      if (name.includes("/") || name.includes("\\")) {
+        return "The name can't contain slashes.";
+      }
+      const form = new FormData();
+      form.append("path", state.path || "");
+      form.append("name", name);
+      const res = await fetch("/api/upload/folder", { method: "POST", body: form });
+      if (res.status === 401) {
+        window.location.href = "/login";
+        return;
+      }
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        return body.detail || `Could not create folder (${res.status}).`;
+      }
+      closePromptModal();
+      await initTree();                 // surface the new folder in the sidebar
+      await navigate(state.path || "");
+    },
+  });
+}
+
+el.uploadBtn.addEventListener("click", () => el.uploadInput.click());
+el.uploadInput.addEventListener("change", () => {
+  uploadFiles(el.uploadInput.files);
+  el.uploadInput.value = "";            // allow re-picking the same file
+});
+el.newFolderBtn.addEventListener("click", createFolder);
+
 // ───── Helpers ─────
 function showLoading(on) {
   el.loading.classList.toggle("hidden", !on);
@@ -982,7 +1198,11 @@ document.addEventListener("click", (e) => {
 });
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") closeDownloadMenu();
+  if (e.key === "Escape") {
+    closeDownloadMenu();
+    closeSidebar();
+    closePromptModal();
+  }
 });
 
 el.lbClose.addEventListener("click", closeLightbox);
@@ -994,6 +1214,29 @@ el.lightbox.addEventListener("click", (e) => {
     closeLightbox();
   }
 });
+
+// Swipe left/right to move between images. Disabled while a video is showing
+// so it doesn't fight the scrubber and playback controls.
+let lbTouch = null;
+el.lightbox.addEventListener("touchstart", (e) => {
+  if (e.touches.length !== 1 || !el.lbVideoWrap.classList.contains("hidden")) {
+    lbTouch = null;
+    return;
+  }
+  lbTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+}, { passive: true });
+
+el.lightbox.addEventListener("touchend", (e) => {
+  if (!lbTouch) return;
+  const t = e.changedTouches[0];
+  const dx = t.clientX - lbTouch.x;
+  const dy = t.clientY - lbTouch.y;
+  lbTouch = null;
+  // Require a clearly horizontal flick.
+  if (Math.abs(dx) < 50 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
+  if (dx < 0) lightboxNext();
+  else lightboxPrev();
+}, { passive: true });
 
 document.addEventListener("keydown", (e) => {
   if (el.lightbox.classList.contains("hidden")) return;

@@ -525,14 +525,22 @@ body.select-mode .item.selected {
   border-color: var(--accent);
 }
 
-#download-btn {
+#download-btn,
+#upload-btn {
   color: var(--text);
   background: var(--accent);
   border-color: var(--accent);
 }
 
-#download-btn:hover {
+#download-btn:hover,
+#upload-btn:hover {
   filter: brightness(1.1);
+}
+
+#upload-btn:disabled {
+  opacity: 0.65;
+  cursor: default;
+  filter: none;
 }
 
 .download-wrap {
@@ -922,4 +930,227 @@ body.select-mode .item.selected {
   0%   { transform: scale(1); }
   40%  { transform: scale(1.25); }
   100% { transform: scale(1); }
+}
+
+/* ───── Modal ───── */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(8, 9, 11, 0.7);
+  backdrop-filter: blur(4px);
+}
+
+.modal-card {
+  width: min(100%, 380px);
+  padding: 22px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+}
+
+.modal-title {
+  margin: 0 0 14px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.modal-input {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: #111318;
+  color: var(--text);
+  /* 16px keeps iOS Safari from zooming the page on focus. */
+  font-size: 16px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.modal-input:focus {
+  border-color: var(--accent);
+}
+
+.modal-error {
+  margin: 8px 0 0;
+  min-height: 16px;
+  color: #ff6b6b;
+  font-size: 13px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.modal-btn {
+  padding: 9px 16px;
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  transition: background 0.15s, color 0.15s, filter 0.15s;
+}
+
+.modal-btn-secondary {
+  background: var(--bg);
+  color: var(--text-dim);
+}
+
+.modal-btn-secondary:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.modal-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.modal-btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+.modal-btn-primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+  filter: none;
+}
+
+/* ───── Mobile ───── */
+/* These three only ever appear on small screens; hidden by default so the
+   desktop layout is untouched. */
+.menu-btn,
+.sidebar-close,
+.sidebar-backdrop {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* Sidebar becomes a slide-in drawer over the content. */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    height: auto;
+    width: min(280px, 82vw);
+    z-index: 200;
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+    box-shadow: var(--shadow);
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    z-index: 150;
+  }
+
+  .menu-btn {
+    display: inline-flex;
+  }
+
+  .sidebar-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    color: var(--text-dim);
+    flex-shrink: 0;
+    transition: background 0.15s, color 0.15s;
+  }
+  .sidebar-close:hover {
+    background: var(--bg-hover);
+    color: var(--text);
+  }
+
+  /* Toolbar: compact, icon-only buttons that wrap instead of overflowing. */
+  .toolbar {
+    padding: 8px 10px;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .toolbar-left {
+    flex: 1 1 auto;
+    min-width: 0;
+    gap: 6px;
+  }
+  .toolbar-right {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 6px;
+  }
+  .location {
+    max-width: none;
+    font-size: 14px;
+  }
+  .toolbar .btn-label {
+    display: none;
+  }
+  .pill-btn {
+    padding: 8px;
+  }
+  .download-wrap .caret {
+    display: none;
+  }
+
+  /* Grid: more columns of smaller tiles. */
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
+    gap: 10px;
+    padding: 12px;
+  }
+  .item {
+    padding: 6px;
+    gap: 6px;
+    contain-intrinsic-size: 160px 160px;
+  }
+  .item-name {
+    font-size: 12px;
+  }
+
+  /* Smaller badges so they don't swamp a small tile. */
+  .item .select-checkbox,
+  .item .heart-badge {
+    top: 8px;
+    right: 8px;
+    width: 22px;
+    height: 22px;
+  }
+  body.select-mode .item .heart-badge {
+    top: 36px;
+  }
+
+  /* Lift the video controls clear of the footer on short screens. */
+  .video-controls {
+    bottom: 64px;
+  }
+
+  /* Anchor the dialog near the top so the on-screen keyboard can't cover it. */
+  .modal {
+    align-items: flex-start;
+  }
+  .modal-card {
+    margin-top: 14vh;
+  }
 }
