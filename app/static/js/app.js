@@ -237,6 +237,34 @@ function pumpRender() {
   });
 }
 
+// Grid <video> thumbnails are mounted lazily. A live <video> per tile would
+// crater scrolling and exhaust the browser's video-decoder pool in a big
+// folder (which is why thumbnails further down stop appearing). We attach the
+// src only while a tile is near the viewport and drop it once it scrolls away.
+const videoThumbObserver = new IntersectionObserver(
+  (entries) => {
+    for (const entry of entries) {
+      const video = entry.target.querySelector("video");
+      if (!video) continue;
+      const thumb = video.parentElement;
+      if (entry.isIntersecting) {
+        if (!video.getAttribute("src") && video.dataset.src) {
+          if (!video.classList.contains("loaded")) thumb.classList.add("loading");
+          video.setAttribute("src", video.dataset.src);
+          video.load();
+        }
+      } else if (video.getAttribute("src")) {
+        // Off-screen: drop the src so the decoder and connection are freed.
+        video.removeAttribute("src");
+        video.load();
+        video.classList.remove("loaded");
+        thumb.classList.remove("loading");
+      }
+    }
+  },
+  { rootMargin: "400px 0px" },
+);
+
 function renderGrid() {
   const items = state.folders.length + state.files.length;
   el.empty.classList.toggle("hidden", items > 0);
@@ -246,6 +274,7 @@ function renderGrid() {
   state.files.forEach((f, i) => pathIndex.set(f.path, { kind: "file", data: f, i }));
 
   teardownIncrementalRender();
+  videoThumbObserver.disconnect();
   el.grid.replaceChildren();
 
   renderQueue = [
@@ -295,11 +324,14 @@ function fileTile(file) {
   const thumb = document.createElement("div");
   thumb.className = "item-thumb";
   if (file.is_video) {
-    thumb.classList.add("video", "loading");
+    thumb.classList.add("video");
     const video = document.createElement("video");
     video.muted = true;
     video.playsInline = true;
     video.preload = "metadata";
+    // The src is attached by videoThumbObserver only while the tile is near
+    // the viewport — see the observer above for why.
+    video.dataset.src = `/api/video?path=${encodeURIComponent(file.path)}#t=0.1`;
     video.addEventListener("loadeddata", () => {
       video.classList.add("loaded");
       thumb.classList.remove("loading");
@@ -307,12 +339,12 @@ function fileTile(file) {
     video.addEventListener("error", () => {
       thumb.classList.remove("loading");
     });
-    video.src = `/api/video?path=${encodeURIComponent(file.path)}#t=0.1`;
     thumb.appendChild(video);
     const badge = document.createElement("div");
     badge.className = "play-badge";
     badge.innerHTML = PLAY_BADGE_SVG;
     thumb.appendChild(badge);
+    videoThumbObserver.observe(node);
   } else if (file.previewable) {
     thumb.classList.add("loading");
     const img = document.createElement("img");

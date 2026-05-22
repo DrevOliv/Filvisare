@@ -344,10 +344,11 @@ img {
   transition: background 0.15s, transform 0.15s;
   user-select: none;
   position: relative;
-  /* Skip rendering off-screen tiles — native virtualization.
-     contain-intrinsic-size reserves space so scroll position stays stable. */
+  /* Skip rendering off-screen tiles — native virtualization. The `auto`
+     keyword makes a tile remember its real size once rendered, so scrolling
+     back up stays stable instead of flashing blank placeholders. */
   content-visibility: auto;
-  contain-intrinsic-size: 240px 240px;
+  contain-intrinsic-size: auto 240px;
 }
 
 .item:hover {
@@ -1123,7 +1124,7 @@ body.select-mode .item.selected {
   .item {
     padding: 6px;
     gap: 6px;
-    contain-intrinsic-size: 160px 160px;
+    contain-intrinsic-size: auto 160px;
   }
   .item-name {
     font-size: 12px;
