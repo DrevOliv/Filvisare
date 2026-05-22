@@ -241,11 +241,11 @@ docker login
 ### Same-arch build (fastest if you deploy on the same CPU as you build)
 
 ```bash
-docker build -t YOUR_DOCKERHUB_USER/filvisare:v0.1.0 \
-             -t YOUR_DOCKERHUB_USER/filvisare:latest .
+docker build -t drevoliv/filvisare:v0.1.0 \
+             -t drevoliv/filvisare:latest .
 
-docker push YOUR_DOCKERHUB_USER/filvisare:v0.1.0
-docker push YOUR_DOCKERHUB_USER/filvisare:latest
+docker push drevoliv/filvisare:v0.1.0
+docker push drevoliv/filvisare:latest
 ```
 
 ### Multi-arch build (recommended)
@@ -261,8 +261,8 @@ docker buildx inspect --bootstrap
 # Build and push in one step
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  -t YOUR_DOCKERHUB_USER/filvisare:v0.1.0 \
-  -t YOUR_DOCKERHUB_USER/filvisare:latest \
+  -t drevoliv/filvisare:v1.1.0 \
+  -t drevoliv/filvisare:latest \
   --push .
 ```
 
